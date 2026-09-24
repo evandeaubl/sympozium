@@ -26,11 +26,11 @@ BIN_DIR = bin
 BINARIES = controller apiserver ipc-bridge webhook agent-runner sympozium web-proxy node-probe model-gateway
 
 # All channel binaries
-CHANNELS = telegram whatsapp discord slack
+CHANNELS = telegram whatsapp discord slack matrix
 
 # All images
 IMAGES = controller apiserver ipc-bridge webhook agent-runner web-proxy node-probe model-gateway \
-         channel-telegram channel-whatsapp channel-discord channel-slack \
+         channel-telegram channel-whatsapp channel-discord channel-slack channel-matrix \
 		 skill-k8s-ops skill-sre-observability skill-github-gitops skill-llmfit skill-memory \
 		 llmfit-daemon mcp-bridge harness-reference
 
@@ -102,6 +102,7 @@ test-integration: ## Run integration tests (requires Kind cluster + API keys)
 	./test/integration/test-llmfit-cluster-fit.sh
 	./test/integration/test-telegram-channel.sh
 	./test/integration/test-slack-channel.sh
+	./test/integration/test-matrix-channel.sh
 	./test/integration/test-mcp-bridge.sh
 	./test/integration/test-lifecycle-hooks.sh
 	./test/integration/test-harness-mode.sh

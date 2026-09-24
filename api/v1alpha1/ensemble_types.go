@@ -113,6 +113,12 @@ type EnsembleSpec struct {
 	// +optional
 	SlackOptions *SlackChannelOptions `json:"slackOptions,omitempty"`
 
+	// MatrixOptions configures Matrix-specific channel settings
+	// (homeserver URL). Propagated as ChannelSpec.Matrix on every
+	// generated Agent for the matrix channel.
+	// +optional
+	MatrixOptions *MatrixChannelOptions `json:"matrixOptions,omitempty"`
+
 	// ChannelVolumes maps channel type to extra pod volumes injected into
 	// the generated channel deployment (e.g. Vault CSI SecretProviderClass
 	// volume). Mirrors ChannelConfigs/ChannelAccessControl indexing.
@@ -295,6 +301,12 @@ type AgentConfigSpec struct {
 	// SlackOptions entirely (no field-level merge).
 	// +optional
 	SlackOptions *SlackChannelOptions `json:"slackOptions,omitempty"`
+
+	// MatrixOptions overrides ensemble-level Matrix-specific channel
+	// settings (homeserver URL) for this agent configuration. When
+	// non-nil, replaces the ensemble-level MatrixOptions entirely.
+	// +optional
+	MatrixOptions *MatrixChannelOptions `json:"matrixOptions,omitempty"`
 
 	// MCPServers configures remote MCP (Model Context Protocol) servers
 	// for this agent configuration. Each entry references an MCPServer CR

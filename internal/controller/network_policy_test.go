@@ -89,7 +89,7 @@ func TestBuildChannelDeployment_InstanceLabel(t *testing.T) {
 func TestBuildChannelDeployment_AllChannelTypes(t *testing.T) {
 	// Verify every supported channel type gets the correct "channel" component
 	// label so that network policies apply uniformly.
-	channelTypes := []string{"telegram", "discord", "slack", "whatsapp"}
+	channelTypes := []string{"telegram", "discord", "slack", "whatsapp", "matrix"}
 
 	for _, chType := range channelTypes {
 		t.Run(chType, func(t *testing.T) {

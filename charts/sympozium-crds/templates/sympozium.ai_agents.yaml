@@ -629,6 +629,16 @@ spec:
                       required:
                       - secret
                       type: object
+                    matrix:
+                      description: Matrix holds Matrix-specific options. Ignored for
+                        other channel types.
+                      properties:
+                        homeserver:
+                          description: |-
+                            Homeserver is the base URL of the Matrix homeserver
+                            (e.g. https://matrix.org). Required for the Matrix channel.
+                          type: string
+                      type: object
                     slack:
                       description: Slack holds Slack-specific options. Ignored for
                         other channel types.
@@ -706,7 +716,7 @@ spec:
                       type: object
                     type:
                       description: Type is the channel type (telegram, whatsapp, discord,
-                        slack).
+                        slack, matrix).
                       type: string
                     volumeMounts:
                       description: VolumeMounts are extra mounts for the channel container.

@@ -165,6 +165,7 @@ const CHANNELS = [
   { value: "discord", label: "Discord" },
   { value: "slack", label: "Slack" },
   { value: "telegram", label: "Telegram" },
+  { value: "matrix", label: "Matrix" },
   { value: "whatsapp", label: "WhatsApp" },
 ];
 
@@ -199,9 +200,11 @@ export interface WizardResult {
   model: string;
   baseURL: string;
   skills: string[];
-  channels: string[];
-  channelConfigs: Record<string, string>;
-  heartbeatInterval: string;
+   channels: string[];
+   channelConfigs: Record<string, string>;
+   /** Matrix homeserver URL per channel type */
+   channelMatrixHomeservers: Record<string, string>;
+   heartbeatInterval: string;
   /** Web endpoint rate limit (requests per minute) when web-endpoint skill is selected */
   webEndpointRPM?: string;
   /** Custom hostname for web endpoint HTTPRoute */
@@ -619,8 +622,9 @@ export function OnboardingWizard({
       (skill) => !defaultRuntimeRef || !harnessIncompatibleSkills.includes(skill),
     ),
     channels: defaults?.channels || Object.keys(defaults?.channelConfigs || {}),
-    channelConfigs: defaults?.channelConfigs || {},
-    heartbeatInterval: defaults?.heartbeatInterval || "",
+     channelConfigs: defaults?.channelConfigs || {},
+     channelMatrixHomeservers: defaults?.channelMatrixHomeservers || {},
+     heartbeatInterval: defaults?.heartbeatInterval || "",
     webEndpointRPM: defaults?.webEndpointRPM || "60",
     webEndpointHostname: defaults?.webEndpointHostname || "",
     githubRepo: defaults?.githubRepo || "",
@@ -995,8 +999,9 @@ export function OnboardingWizard({
         (skill) => !d.runtimeRef || !harnessIncompatibleSkills.includes(skill),
       ),
       channels: d.channels || Object.keys(d.channelConfigs || {}),
-      channelConfigs: d.channelConfigs || {},
-      heartbeatInterval: d.heartbeatInterval || "",
+       channelConfigs: d.channelConfigs || {},
+       channelMatrixHomeservers: d.channelMatrixHomeservers || {},
+       heartbeatInterval: d.heartbeatInterval || "",
       webEndpointRPM: d.webEndpointRPM || "60",
       webEndpointHostname: d.webEndpointHostname || "",
       githubRepo: d.githubRepo || "",
@@ -2283,8 +2288,36 @@ export function OnboardingWizard({
                     Use an existing secret that contains the channel token.
                   </p>
                 </div>
+
+                {actionChannels[channelActionIdx] === "matrix" && (
+                  <div className="space-y-2">
+                    <Label>Matrix Homeserver URL</Label>
+                    <Input
+                      value={
+                        form.channelMatrixHomeservers?.["matrix"] || ""
+                      }
+                      onChange={(e) => {
+                        const hs = e.target.value.trim();
+                        const hServers = { ...(form.channelMatrixHomeservers || {}) };
+                        if (hs) {
+                          hServers["matrix"] = hs;
+                        } else {
+                          delete hServers["matrix"];
+                        }
+                        setForm({ ...form, channelMatrixHomeservers: hServers });
+                      }}
+                      placeholder="https://matrix.org"
+                      className="h-8 text-sm font-mono"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Base URL of your Matrix homeserver. The bot credentials
+                      (user ID + password or access token) come from the secret
+                      above.
+                    </p>
+                  </div>
+                )}
               </>
-            )}
+             )}
           </div>
         )}
 

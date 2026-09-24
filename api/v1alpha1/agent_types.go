@@ -252,7 +252,7 @@ type RateLimitSpec struct {
 
 // ChannelSpec defines a channel connection.
 type ChannelSpec struct {
-	// Type is the channel type (telegram, whatsapp, discord, slack).
+	// Type is the channel type (telegram, whatsapp, discord, slack, matrix).
 	Type string `json:"type"`
 
 	// ConfigRef references the secret containing channel credentials.
@@ -272,6 +272,10 @@ type ChannelSpec struct {
 	// Slack holds Slack-specific options. Ignored for other channel types.
 	// +optional
 	Slack *SlackChannelOptions `json:"slack,omitempty"`
+
+	// Matrix holds Matrix-specific options. Ignored for other channel types.
+	// +optional
+	Matrix *MatrixChannelOptions `json:"matrix,omitempty"`
 
 	// Volumes are extra pod volumes for the channel pod (e.g. CSI
 	// SecretProviderClass priming the configRef Secret). Channel pods are
@@ -384,6 +388,14 @@ type SlackChannelOptions struct {
 	// effect when Threading is false.
 	// +optional
 	ThreadStickiness bool `json:"threadStickiness,omitempty"`
+}
+
+// MatrixChannelOptions holds Matrix-specific channel options.
+type MatrixChannelOptions struct {
+	// Homeserver is the base URL of the Matrix homeserver
+	// (e.g. https://matrix.org). Required for the Matrix channel.
+	// +optional
+	Homeserver string `json:"homeserver,omitempty"`
 }
 
 // AgentsSpec defines agent configuration.

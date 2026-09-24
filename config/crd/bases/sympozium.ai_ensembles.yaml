@@ -425,6 +425,18 @@ spec:
                             type: object
                           type: array
                       type: object
+                    matrixOptions:
+                      description: |-
+                        MatrixOptions overrides ensemble-level Matrix-specific channel
+                        settings (homeserver URL) for this agent configuration. When
+                        non-nil, replaces the ensemble-level MatrixOptions entirely.
+                      properties:
+                        homeserver:
+                          description: |-
+                            Homeserver is the base URL of the Matrix homeserver
+                            (e.g. https://matrix.org). Required for the Matrix channel.
+                          type: string
+                      type: object
                     mcpServers:
                       description: |-
                         MCPServers configures remote MCP (Model Context Protocol) servers
@@ -2974,6 +2986,18 @@ spec:
                 items:
                   type: string
                 type: array
+              matrixOptions:
+                description: |-
+                  MatrixOptions configures Matrix-specific channel settings
+                  (homeserver URL). Propagated as ChannelSpec.Matrix on every
+                  generated Agent for the matrix channel.
+                properties:
+                  homeserver:
+                    description: |-
+                      Homeserver is the base URL of the Matrix homeserver
+                      (e.g. https://matrix.org). Required for the Matrix channel.
+                    type: string
+                type: object
               modelRef:
                 description: |-
                   ModelRef references a Model CR for cluster-local inference.

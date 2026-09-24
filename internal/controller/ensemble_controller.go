@@ -976,6 +976,15 @@ func buildChannelSpec(pack *sympoziumv1alpha1.Ensemble, persona *sympoziumv1alph
 			cs.Slack = pack.Spec.SlackOptions
 		}
 	}
+	// Matrix-specific options: persona-level overrides take priority
+	// over ensemble-level. Only applied to the matrix channel type.
+	if ch == "matrix" {
+		if persona.MatrixOptions != nil {
+			cs.Matrix = persona.MatrixOptions
+		} else if pack.Spec.MatrixOptions != nil {
+			cs.Matrix = pack.Spec.MatrixOptions
+		}
+	}
 	if v, ok := pack.Spec.ChannelVolumes[ch]; ok {
 		cs.Volumes = v
 	}

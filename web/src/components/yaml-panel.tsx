@@ -37,6 +37,9 @@ export function instanceYamlFromWizard(result: WizardResult, ownConnection?: Mod
     if (result.channelConfigs[type]) {
       ch.configRef = { secret: result.channelConfigs[type] };
     }
+    if (type === "matrix" && result.channelMatrixHomeservers?.["matrix"]) {
+      ch.matrix = { homeserver: result.channelMatrixHomeservers["matrix"] };
+    }
     return ch;
   });
 
@@ -134,6 +137,9 @@ export function ensembleYamlFromWizard(
     ...(authRefs.length > 0 ? { authRefs } : {}),
     ...(result.baseURL ? { baseURL: result.baseURL } : {}),
     ...(Object.keys(channelConfigs).length > 0 ? { channelConfigs } : {}),
+   ...(result.channelMatrixHomeservers?.["matrix"]
+     ? { matrixOptions: { homeserver: result.channelMatrixHomeservers["matrix"] } }
+     : {}),
     ...(Object.keys(skillParams).length > 0 ? { skillParams } : {}),
     ...(result.heartbeatInterval
       ? { heartbeatInterval: result.heartbeatInterval }

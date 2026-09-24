@@ -14,13 +14,13 @@ ARG CELLN_IMAGE=ghcr.io/sympozium-ai/celln@sha256:471d5831151f349d4133c309bb0d8c
 # controller image only where it can run. Pin the source stage to amd64 so the
 # digest resolves on any build host.
 FROM --platform=linux/amd64 ${CELLN_IMAGE} AS celln
-FROM --platform=$BUILDPLATFORM alpine:3.20 AS celln-cli
+FROM --platform=$BUILDPLATFORM docker.io/library/alpine:3.20 AS celln-cli
 ARG TARGETARCH
 COPY --from=celln /usr/local/bin/celln /celln
 RUN mkdir -p /rootfs/usr/local/bin && \
     if [ "${TARGETARCH}" = "amd64" ]; then cp /celln /rootfs/usr/local/bin/celln; fi
 
-FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
+FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.26-alpine AS builder
 ARG TARGETOS=linux
 ARG TARGETARCH
 ARG IMAGE_TAG=latest

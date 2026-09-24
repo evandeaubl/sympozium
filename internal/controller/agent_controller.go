@@ -358,6 +358,16 @@ func (r *AgentReconciler) buildChannelDeployment(
 		}
 	}
 
+	// Matrix-specific configuration (homeserver URL). Matrix credentials
+	// (MATRIX_USER_ID, MATRIX_PASSWORD/MATRIX_ACCESS_TOKEN) are injected
+	// via the configRef Secret envFrom above.
+	if ch.Type == "matrix" && ch.Matrix != nil && ch.Matrix.Homeserver != "" {
+		deploy.Spec.Template.Spec.Containers[0].Env = append(
+			deploy.Spec.Template.Spec.Containers[0].Env,
+			corev1.EnvVar{Name: "MATRIX_HOMESERVER", Value: ch.Matrix.Homeserver},
+		)
+	}
+
 	// Per-channel volumes (e.g. CSI SecretProviderClass priming the
 	// configRef Secret). Applied last so per-channel volumes are appended
 	// alongside any built-in volumes (e.g. WhatsApp's credential PVC).

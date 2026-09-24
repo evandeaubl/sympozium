@@ -801,11 +801,13 @@ func runOnboard() error {
 	fmt.Println("    1) Telegram  — easiest, just talk to @BotFather")
 	fmt.Println("    2) Slack")
 	fmt.Println("    3) Discord")
-	fmt.Println("    4) WhatsApp")
-	fmt.Println("    5) Skip — I'll add a channel later")
-	channelChoice := prompt(reader, "  Choice [1-5]", "5")
+	fmt.Println("    4) Matrix")
+	fmt.Println("    5) WhatsApp  — scan a QR code to link")
+	fmt.Println("    6) Skip — I'll add a channel later")
+	channelChoice := prompt(reader, "  Choice [1-6]", "6")
 
 	var channelType, channelTokenKey, channelToken, slackAppToken string
+	var matrixHomeserver, matrixUserID, matrixPassword string
 	switch channelChoice {
 	case "1":
 		channelType = "telegram"
@@ -825,6 +827,17 @@ func runOnboard() error {
 		fmt.Println("\n  💡 Create a Discord app at https://discord.com/developers/applications")
 		channelToken = promptSecret(reader, "  Bot Token")
 	case "4":
+		channelType = "matrix"
+		channelTokenKey = "MATRIX_ACCESS_TOKEN"
+		fmt.Println("\n  💡 You need either MATRIX_ACCESS_TOKEN or (MATRIX_USER_ID + MATRIX_PASSWORD)")
+		fmt.Println("  💡 Get credentials from your Matrix homeserver")
+		channelToken = promptSecret(reader, "  Access Token (or leave blank for password auth)")
+		matrixHomeserver = prompt(reader, "  Homeserver URL (e.g. https://matrix.org)", "")
+		if channelToken == "" {
+			matrixUserID = prompt(reader, "  User ID (e.g. @mybot:matrix.org)", "")
+			matrixPassword = promptSecret(reader, "  Password")
+		}
+	case "5":
 		channelType = "whatsapp"
 		channelTokenKey = "" // WhatsApp uses QR pairing, no token needed
 		fmt.Println("\n  📱 WhatsApp uses QR code pairing — no API token needed!")
@@ -919,13 +932,30 @@ func runOnboard() error {
 	}
 
 	// 2. Create channel secret.
-	if channelType != "" && channelToken != "" {
+	// For Matrix, either an access token or (user_id + password) is needed.
+	createChannelSecret := channelType != "" && channelToken != ""
+	if channelType == "matrix" && channelToken == "" && matrixUserID != "" && matrixPassword != "" {
+		createChannelSecret = true
+	}
+	if createChannelSecret {
 		fmt.Printf("  Creating secret %s...\n", channelSecretName)
 		_ = kubectl("delete", "secret", channelSecretName, "-n", namespace, "--ignore-not-found")
 		args := []string{
 			"create", "secret", "generic", channelSecretName,
 			"-n", namespace,
-			fmt.Sprintf("--from-literal=%s=%s", channelTokenKey, channelToken),
+		}
+		if channelType == "matrix" {
+			args = append(args, fmt.Sprintf("--from-literal=MATRIX_HOMESERVER=%s", matrixHomeserver))
+			if channelToken != "" {
+				args = append(args, fmt.Sprintf("--from-literal=%s=%s", channelTokenKey, channelToken))
+			} else {
+				args = append(args,
+					fmt.Sprintf("--from-literal=MATRIX_USER_ID=%s", matrixUserID),
+					fmt.Sprintf("--from-literal=MATRIX_PASSWORD=%s", matrixPassword),
+				)
+			}
+		} else {
+			args = append(args, fmt.Sprintf("--from-literal=%s=%s", channelTokenKey, channelToken))
 		}
 		if channelType == "slack" && slackAppToken != "" {
 			args = append(args, fmt.Sprintf("--from-literal=SLACK_APP_TOKEN=%s", slackAppToken))
@@ -961,7 +991,7 @@ func runOnboard() error {
 	}
 	instanceYAML := buildAgentYAML(instanceName, namespace, modelName, baseURL,
 		providerName, instanceSecret, channelType, chSecret,
-		policyName, applyPolicy, githubRepo)
+		policyName, applyPolicy, githubRepo, matrixHomeserver)
 	if err := kubectlApplyStdin(instanceYAML); err != nil {
 		return fmt.Errorf("apply instance: %w", err)
 	}
@@ -1188,7 +1218,7 @@ spec:
 }
 
 func buildAgentYAML(name, ns, model, baseURL, provider, providerSecret,
-	channelType, channelSecret, policyName string, hasPolicy bool, githubRepo string) string {
+	channelType, channelSecret, policyName string, hasPolicy bool, githubRepo string, matrixHomeserver string) string {
 
 	var channelsBlock string
 	if channelType != "" {
@@ -1203,6 +1233,12 @@ func buildAgentYAML(name, ns, model, baseURL, provider, providerSecret,
 			channelsBlock = fmt.Sprintf(`  channels:
     - type: %s
 `, channelType)
+		}
+		// Matrix-specific: homeserver URL
+		if channelType == "matrix" && matrixHomeserver != "" {
+			channelsBlock += fmt.Sprintf(`      matrix:
+        homeserver: %s
+`, matrixHomeserver)
 		}
 	}
 
@@ -2336,6 +2372,7 @@ var channelTypeSuggestions = []suggestion{
 	{"telegram", "Telegram bot channel"},
 	{"slack", "Slack integration"},
 	{"discord", "Discord bot channel"},
+	{"matrix", "Matrix channel"},
 	{"whatsapp", "WhatsApp channel"},
 }
 
@@ -2717,8 +2754,11 @@ const (
 	wizStepAPIKey                               // text: API key (non-ollama)
 	wizStepGithubRepo                           // text: GitHub repo (owner/repo)
 	wizStepTeamTask                             // text: team-level task/instructions
-	wizStepChannel                              // menu 1-5: channel type
+	wizStepChannel                              // menu 1-6: channel type
 	wizStepChannelToken                         // text: channel bot token
+	wizStepMatrixHomeserver                     // text: Matrix homeserver URL
+	wizStepMatrixUserID                         // text: Matrix user ID (password auth)
+	wizStepMatrixPassword                       // text: Matrix password (password auth)
 	wizStepPolicy                               // y/n: apply default policy
 	wizStepAgentSandbox                         // y/n: enable agent sandbox (CRD) isolation
 	wizStepRunTimeout                           // menu: run timeout per agent run
@@ -2747,6 +2787,7 @@ const (
 	wizStepPersonaAgentSandbox              // y/n: enable agent sandbox (CRD) isolation
 	wizStepPersonaChannels                  // multi-toggle: channels to bind
 	wizStepPersonaChannelToken              // text: channel token (per selected channel)
+	wizStepPersonaMatrixHomeserver          // text: Matrix homeserver URL (matrix only)
 	wizStepPersonaHeartbeat                 // menu 1-5: heartbeat interval override
 	wizStepPersonaConfirm                   // y/n: confirm summary
 	wizStepPersonaApplying                  // auto — patch pack + create resources
@@ -2772,6 +2813,9 @@ type wizardState struct {
 	channelType         string
 	channelTokenKey     string
 	channelToken        string
+	matrixHomeserver    string // Matrix homeserver URL (for Matrix channel)
+	matrixUserID        string // Matrix user ID (password auth)
+	matrixPassword      string // Matrix password (password auth)
 	applyPolicy         bool
 	heartbeatCron       string // cron expression for heartbeat schedule
 	heartbeatLabel      string // human-readable label (e.g. "every hour")
@@ -2812,16 +2856,18 @@ func (w *wizardState) reset() {
 
 // personaChannelChoice tracks a channel toggle during persona onboarding.
 type personaChannelChoice struct {
-	chType   string // telegram, slack, discord, whatsapp
-	enabled  bool
-	tokenKey string // env var name (e.g. TELEGRAM_BOT_TOKEN)
-	token    string // user-supplied token value
+	chType     string // telegram, slack, discord, matrix, whatsapp
+	enabled    bool
+	tokenKey   string // env var name (e.g. TELEGRAM_BOT_TOKEN)
+	token      string // user-supplied token value
+	homeserver string // Matrix homeserver URL (matrix only)
 }
 
 var defaultPersonaChannels = []personaChannelChoice{
 	{chType: "telegram", tokenKey: "TELEGRAM_BOT_TOKEN"},
 	{chType: "slack", tokenKey: "SLACK_BOT_TOKEN"},
 	{chType: "discord", tokenKey: "DISCORD_BOT_TOKEN"},
+	{chType: "matrix", tokenKey: "MATRIX_ACCESS_TOKEN"},
 	{chType: "whatsapp", tokenKey: ""}, // QR pairing, no token
 }
 
@@ -3028,7 +3074,7 @@ var editConcurrencyPolicies = []string{"Forbid", "Allow", "Replace"}
 var editMemoryFieldCount = 3    // enabled, maxSizeKB, systemPrompt
 var editHeartbeatFieldCount = 6 // schedule, task, type, concurrencyPolicy, includeMemory, suspend
 var editTabNames = []string{"Memory", "Heartbeat", "Skills", "Channels", "Web Endpoint", "Lifecycle"}
-var availableChannelTypes = []string{"telegram", "slack", "discord", "whatsapp"}
+var availableChannelTypes = []string{"telegram", "slack", "discord", "matrix", "whatsapp"}
 
 // ensembleHeartbeatOptions defines the selectable heartbeat intervals for Ensemble editing.
 var ensembleHeartbeatOptions = []struct {
@@ -3051,6 +3097,8 @@ func channelTokenKeyFor(chType string) string {
 		return "SLACK_BOT_TOKEN"
 	case "discord":
 		return "DISCORD_BOT_TOKEN"
+	case "matrix":
+		return "MATRIX_ACCESS_TOKEN"
 	default:
 		return "" // whatsapp uses QR pairing, no token
 	}
@@ -9964,12 +10012,12 @@ func (m tuiModel) advanceWizard(val string) (tea.Model, tea.Cmd) {
 	case wizStepTeamTask:
 		w.teamTask = strings.TrimSpace(val)
 		w.step = wizStepChannel
-		m.input.Placeholder = "Channel [1-5] (default: 5 — skip)"
+		m.input.Placeholder = "Channel [1-6] (default: 6 — skip)"
 		return m, nil
 
 	case wizStepChannel:
 		if val == "" {
-			val = "5"
+			val = "6"
 		}
 		w.channelChoice = val
 		switch val {
@@ -9992,6 +10040,13 @@ func (m tuiModel) advanceWizard(val string) (tea.Model, tea.Cmd) {
 			m.input.Placeholder = "Discord Bot Token"
 			return m, nil
 		case "4":
+			w.channelType = "matrix"
+			w.channelTokenKey = "MATRIX_ACCESS_TOKEN"
+			// Go to a new step to collect the homeserver URL, then token
+			w.step = wizStepMatrixHomeserver
+			m.input.Placeholder = "Matrix Homeserver URL (e.g. https://matrix.org)"
+			return m, nil
+		case "5":
 			w.channelType = "whatsapp"
 			w.channelTokenKey = "" // WhatsApp uses QR pairing, no token needed
 			// Skip token step — go straight to policy
@@ -10007,6 +10062,40 @@ func (m tuiModel) advanceWizard(val string) (tea.Model, tea.Cmd) {
 
 	case wizStepChannelToken:
 		w.channelToken = val
+		if w.channelType == "matrix" {
+			// If token was provided, skip password auth. Otherwise ask for user ID.
+			if w.channelToken == "" {
+				w.step = wizStepMatrixUserID
+				m.input.Placeholder = "Matrix User ID (e.g. @mybot:matrix.org)"
+				return m, nil
+			}
+		}
+		w.step = wizStepPolicy
+		m.input.Placeholder = "Apply default policy? [Y/n]"
+		return m, nil
+
+	case wizStepMatrixHomeserver:
+		w.matrixHomeserver = strings.TrimSpace(val)
+		w.channelTokenKey = "MATRIX_ACCESS_TOKEN"
+		w.step = wizStepChannelToken
+		m.input.Placeholder = "Matrix Access Token (or press Enter for password auth)"
+		return m, nil
+
+	case wizStepMatrixUserID:
+		w.matrixUserID = strings.TrimSpace(val)
+		if w.matrixUserID == "" {
+			// If no user ID, skip password and just use whatever token was set
+			w.step = wizStepPolicy
+			m.input.Placeholder = "Apply default policy? [Y/n]"
+			return m, nil
+		}
+		w.step = wizStepMatrixPassword
+		m.input.Placeholder = "Matrix Password (hidden)"
+		return m, nil
+
+	case wizStepMatrixPassword:
+		w.matrixPassword = val
+		w.channelTokenKey = "" // password auth, token not used
 		w.step = wizStepPolicy
 		m.input.Placeholder = "Apply default policy? [Y/n]"
 		return m, nil
@@ -10378,6 +10467,16 @@ func (m tuiModel) advanceWizard(val string) (tea.Model, tea.Cmd) {
 		w.personaChannelIdx++
 		return m.advancePersonaChannelToken()
 
+	case wizStepPersonaMatrixHomeserver:
+		// Store homeserver for current Matrix channel, then ask for token.
+		if w.personaChannelIdx < len(w.personaChannels) {
+			w.personaChannels[w.personaChannelIdx].homeserver = strings.TrimSpace(val)
+		}
+		w.step = wizStepPersonaChannelToken
+		m.input.SetValue("")
+		m.input.Placeholder = "Matrix access token (or press Enter for password auth)"
+		return m, nil
+
 	case wizStepPersonaHeartbeat:
 		if val == "" {
 			val = "2"
@@ -10442,6 +10541,13 @@ func (m tuiModel) advancePersonaChannelToken() (tea.Model, tea.Cmd) {
 		ch := w.personaChannels[w.personaChannelIdx]
 		if ch.enabled && ch.tokenKey != "" {
 			// This channel needs a token.
+			if ch.chType == "matrix" {
+				// Matrix: collect homeserver first, then token
+				w.step = wizStepPersonaMatrixHomeserver
+				m.input.SetValue("")
+				m.input.Placeholder = fmt.Sprintf("Matrix homeserver URL for %s (e.g. https://matrix.org)", ch.chType)
+				return m, nil
+			}
 			w.step = wizStepPersonaChannelToken
 			m.input.SetValue("")
 			m.input.Placeholder = fmt.Sprintf("%s token (%s)", ch.chType, ch.tokenKey)
@@ -10706,12 +10812,31 @@ func (m tuiModel) renderWizardPanel(h int) string {
 		lines = append(lines, menuNumStyle.Render("  1)")+menuStyle.Render(" Telegram  — easiest, just talk to @BotFather"))
 		lines = append(lines, menuNumStyle.Render("  2)")+menuStyle.Render(" Slack"))
 		lines = append(lines, menuNumStyle.Render("  3)")+menuStyle.Render(" Discord"))
-		lines = append(lines, menuNumStyle.Render("  4)")+menuStyle.Render(" WhatsApp  — scan a QR code to link"))
-		lines = append(lines, menuNumStyle.Render("  5)")+menuStyle.Render(" Skip — I'll add a channel later"))
+		lines = append(lines, menuNumStyle.Render("  4)")+menuStyle.Render(" Matrix"))
+		lines = append(lines, menuNumStyle.Render("  5)")+menuStyle.Render(" WhatsApp  — scan a QR code to link"))
+		lines = append(lines, menuNumStyle.Render("  6)")+menuStyle.Render(" Skip — I'll add a channel later"))
 
 	case wizStepChannelToken:
 		lines = append(lines, stepStyle.Render("  📋 Step 6/9 — Connect a Channel (continued)"))
-		lines = append(lines, labelStyle.Render(fmt.Sprintf("  Paste your %s token:", w.channelType)))
+		if w.channelType == "matrix" {
+			lines = append(lines, labelStyle.Render("  Paste your Matrix access token (or press Enter for password auth):"))
+		} else {
+			lines = append(lines, labelStyle.Render(fmt.Sprintf("  Paste your %s token:", w.channelType)))
+		}
+
+	case wizStepMatrixHomeserver:
+		lines = append(lines, stepStyle.Render("  📋 Step 6/9 — Connect a Channel (continued)"))
+		lines = append(lines, labelStyle.Render("  Matrix homeserver URL:"))
+		lines = append(lines, hintStyle.Render("  e.g. https://matrix.org"))
+
+	case wizStepMatrixUserID:
+		lines = append(lines, stepStyle.Render("  📋 Step 6/9 — Connect a Channel (continued)"))
+		lines = append(lines, labelStyle.Render("  Matrix user ID:"))
+		lines = append(lines, hintStyle.Render("  e.g. @mybot:matrix.org"))
+
+	case wizStepMatrixPassword:
+		lines = append(lines, stepStyle.Render("  📋 Step 6/9 — Connect a Channel (continued)"))
+		lines = append(lines, labelStyle.Render("  Matrix password (hidden input):"))
 
 	case wizStepPolicy:
 		lines = append(lines, stepStyle.Render("  📋 Step 7/9 — Default Policy"))
@@ -11047,6 +11172,16 @@ func (m tuiModel) renderPersonaWizardPanel(h int,
 			lines = append(lines, stepStyle.Render(fmt.Sprintf("  Step 7b: %s Token", strings.Title(ch.chType))))
 			lines = append(lines, "")
 			lines = append(lines, hintStyle.Render(fmt.Sprintf("  Paste %s or press Enter to skip.", ch.tokenKey)))
+		}
+		lines = append(lines, "")
+
+	case wizStepPersonaMatrixHomeserver:
+		if w.personaChannelIdx < len(w.personaChannels) {
+			ch := w.personaChannels[w.personaChannelIdx]
+			lines = append(lines, stepStyle.Render(fmt.Sprintf("  Step 7b: %s Homeserver", strings.Title(ch.chType))))
+			lines = append(lines, "")
+			lines = append(lines, hintStyle.Render("  Matrix homeserver URL:"))
+			lines = append(lines, hintStyle.Render("  e.g. https://matrix.org"))
 		}
 		lines = append(lines, "")
 
@@ -11389,9 +11524,13 @@ func tuiPersonaApply(ns string, w *wizardState) (string, error) {
 		if err := k8sClient.Get(ctx, types.NamespacedName{Name: chSecretName, Namespace: ns}, existing); err == nil {
 			_ = k8sClient.Delete(ctx, existing)
 		}
+		secretData := map[string]string{ch.tokenKey: ch.token}
+		if ch.chType == "matrix" && ch.homeserver != "" {
+			secretData["MATRIX_HOMESERVER"] = ch.homeserver
+		}
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{Name: chSecretName, Namespace: ns},
-			StringData: map[string]string{ch.tokenKey: ch.token},
+			StringData: secretData,
 		}
 		if err := k8sClient.Create(ctx, secret); err != nil {
 			return "", fmt.Errorf("create channel secret: %w", err)
@@ -11461,6 +11600,15 @@ func tuiPersonaApply(ns string, w *wizardState) (string, error) {
 	}
 	if len(channelConfigs) > 0 {
 		pack.Spec.ChannelConfigs = channelConfigs
+	}
+	// Matrix options: set homeserver on the Ensemble spec.
+	for _, ch := range w.personaChannels {
+		if ch.enabled && ch.chType == "matrix" && ch.homeserver != "" {
+			pack.Spec.MatrixOptions = &sympoziumv1alpha1.MatrixChannelOptions{
+				Homeserver: ch.homeserver,
+			}
+			break
+		}
 	}
 	for i := range pack.Spec.AgentConfigs {
 		pack.Spec.AgentConfigs[i].Model = w.modelName
@@ -11551,14 +11699,29 @@ func tuiOnboardApply(ns string, w *wizardState) (string, error) {
 	}
 
 	// 2. Create channel secret.
-	if w.channelType != "" && w.channelToken != "" {
+	if w.channelType != "" && (w.channelToken != "" || (w.channelType == "matrix" && (w.matrixUserID != "" || w.matrixPassword != ""))) {
 		existing := &corev1.Secret{}
 		if err := k8sClient.Get(ctx, types.NamespacedName{Name: channelSecretName, Namespace: ns}, existing); err == nil {
 			_ = k8sClient.Delete(ctx, existing)
 		}
+		secretData := map[string]string{}
+		if w.channelToken != "" {
+			secretData[w.channelTokenKey] = w.channelToken
+		}
+		if w.channelType == "matrix" {
+			if w.matrixHomeserver != "" {
+				secretData["MATRIX_HOMESERVER"] = w.matrixHomeserver
+			}
+			if w.matrixUserID != "" {
+				secretData["MATRIX_USER_ID"] = w.matrixUserID
+			}
+			if w.matrixPassword != "" {
+				secretData["MATRIX_PASSWORD"] = w.matrixPassword
+			}
+		}
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{Name: channelSecretName, Namespace: ns},
-			StringData: map[string]string{w.channelTokenKey: w.channelToken},
+			StringData: secretData,
 		}
 		if err := k8sClient.Create(ctx, secret); err != nil {
 			return "", fmt.Errorf("create channel secret: %w", err)
@@ -11651,6 +11814,12 @@ func tuiOnboardApply(ns string, w *wizardState) (string, error) {
 		if w.channelType != "whatsapp" && channelSecretName != "" {
 			chSpec.ConfigRef = sympoziumv1alpha1.SecretRef{
 				Secret: channelSecretName,
+			}
+		}
+		// Matrix-specific: homeserver URL
+		if w.channelType == "matrix" && w.matrixHomeserver != "" {
+			chSpec.Matrix = &sympoziumv1alpha1.MatrixChannelOptions{
+				Homeserver: w.matrixHomeserver,
 			}
 		}
 		inst.Spec.Channels = []sympoziumv1alpha1.ChannelSpec{chSpec}
