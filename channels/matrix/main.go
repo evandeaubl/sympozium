@@ -280,6 +280,9 @@ func (mc *MatrixChannel) syncLoop(ctx context.Context) error {
 	syncURL := mc.homeserverURL + apiSuffix + "/sync"
 	since := ""
 	mc.setHealthy(true, "")
+	// On the first sync (no since token), we skip processing messages to avoid
+	// re-processing messages from before the restart.
+	hasSynced := false
 
 	for {
 		select {
@@ -344,15 +347,22 @@ func (mc *MatrixChannel) syncLoop(ctx context.Context) error {
 			}
 		}
 
-		// Process joined room events.
-		for roomID, roomData := range syncResp.Rooms.Join {
-			for _, event := range roomData.Timeline.Events {
-				if event.Type == "m.room.message" {
-					mc.handleSyncEvent(ctx, roomID, event)
+		// Process joined room events - skip on first sync to avoid re-processing
+		// messages from before the restart.
+		if hasSynced {
+			for roomID, roomData := range syncResp.Rooms.Join {
+				for _, event := range roomData.Timeline.Events {
+					if event.Type == "m.room.message" {
+						mc.handleSyncEvent(ctx, roomID, event)
+					}
 				}
 			}
 		}
 
+		if since == "" {
+			fmt.Fprintln(os.Stderr, "Initial sync complete, ready to process new messages")
+		}
+		hasSynced = true
 		since = syncResp.NextBatch
 	}
 }
