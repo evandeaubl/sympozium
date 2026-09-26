@@ -425,6 +425,21 @@ func (mc *MatrixChannel) handleSyncEvent(ctx context.Context, roomID string, eve
 
 	if err := mc.PublishInbound(ctx, msg); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to publish inbound: %v\n", err)
+		return
+	}
+
+	mc.sendReadReceipt(ctx, roomID, event.EventID)
+}
+
+// sendReadReceipt sends an m.read receipt to the Matrix server for the given
+// event. This tells Matrix clients that the bot has read up to that message.
+// See: https://spec.matrix.org/v1.19/client-server-api/#post_matrixclientv3roomsroomidreceiptreceipttypereceipteventid
+func (mc *MatrixChannel) sendReadReceipt(ctx context.Context, roomID, eventID string) {
+	signedRoomID := url.PathEscape(roomID)
+	signedEventID := url.PathEscape(eventID)
+	path := fmt.Sprintf("/rooms/%s/receipt/m.read/%s", signedRoomID, signedEventID)
+	if err := mc.doMatrixRequestNoBody(ctx, http.MethodPost, path); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to send read receipt for %s in %s: %v\n", eventID, roomID, err)
 	}
 }
 
@@ -555,6 +570,21 @@ func nextTxnID(txnMu *sync.Mutex, lastTxnID *int64) int64 {
 		*lastTxnID = 1
 	}
 	return *lastTxnID
+}
+
+// doMatrixRequestNoBody makes an authenticated HTTP request to the Matrix API
+// without a request body.
+func (mc *MatrixChannel) doMatrixRequestNoBody(ctx context.Context, method, path string) error {
+	resp, err := mc.doMatrixRequest(ctx, method, path, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("matrix API returned %d: %s", resp.StatusCode, string(respBody))
+	}
+	return nil
 }
 
 // doMatrixRequest makes an authenticated HTTP request to the Matrix API.
