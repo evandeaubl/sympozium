@@ -29,6 +29,9 @@ import (
 	"time"
 
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
 
 	"github.com/sympozium-ai/sympozium/internal/channel"
 	"github.com/sympozium-ai/sympozium/internal/eventbus"
@@ -455,7 +458,34 @@ func (mc *MatrixChannel) handleOutbound(ctx context.Context) {
 	}
 }
 
+// markdownConverter converts Markdown text to HTML using goldmark.
+// It supports common extensions like tables, strikethrough, task lists,
+// and GFM (GitHub Flavored Markdown) autolinks.
+var markdownConverter = goldmark.New(
+	goldmark.WithExtensions(extension.GFM),
+	goldmark.WithParserOptions(parser.WithAutoHeadingID()),
+)
+
+// convertMarkdownToHTML converts Markdown text to HTML. If conversion
+// fails for any reason, it returns an error so the caller can fall back
+// to sending plain text.
+func convertMarkdownToHTML(markdown string) (string, error) {
+	var buf strings.Builder
+	if err := markdownConverter.Convert([]byte(markdown), &buf); err != nil {
+		return "", err
+	}
+	html := strings.TrimSpace(buf.String())
+	if html == "" {
+		return "", fmt.Errorf("empty HTML output")
+	}
+	return html, nil
+}
+
 // sendMessage sends a message to a Matrix room via PUT /rooms/{roomId}/send/m.room.message/{txnId}.
+// Message format handling:
+//   - "html": the text is used directly as formatted_body with org.matrix.custom.html
+//   - "markdown": the text is converted to HTML and attached as formatted_body
+//   - "plain" or any other value: sent as plain text without formatted_body
 func (mc *MatrixChannel) sendMessage(ctx context.Context, msg channel.OutboundMessage, txnMu *sync.Mutex, lastTxnID *int64) error {
 	txnID := nextTxnID(txnMu, lastTxnID)
 
@@ -464,10 +494,20 @@ func (mc *MatrixChannel) sendMessage(ctx context.Context, msg channel.OutboundMe
 		"body":    msg.Text,
 	}
 
-	// Handle HTML format.
-	if msg.Format == "html" {
+	switch msg.Format {
+	case "html":
 		content["format"] = "org.matrix.custom.html"
 		content["formatted_body"] = msg.Text
+	case "markdown":
+		if html, err := convertMarkdownToHTML(msg.Text); err == nil {
+			content["format"] = "org.matrix.custom.html"
+			content["formatted_body"] = html
+		}
+	case "plain", "":
+		// Plain text — no formatted_body.
+	default:
+		// Unknown format value — log and send as plain text.
+		fmt.Fprintf(os.Stderr, "unknown message format %q, sending as plain text\n", msg.Format)
 	}
 
 	// Handle reply (reply_to in metadata or ReplyTo field).

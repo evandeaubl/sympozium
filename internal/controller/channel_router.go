@@ -437,13 +437,18 @@ func (cr *ChannelRouter) handleCompleted(ctx context.Context, event *eventbus.Ev
 	// agent's display name so a shared channel bot (e.g. one Slack app across a
 	// multi-agent Ensemble) posts under distinct per-agent identities. Channels
 	// that don't support attribution ignore Username.
+	detected := channelpkg.DetectFormat(responseText)
 	outMsg := channelpkg.OutboundMessage{
 		Channel:  replyChannel,
 		ChatID:   replyChatID,
 		ThreadID: replyThreadID,
 		Text:     responseText,
+		Format:   detected.Format,
 		Username: displayNameForReply(run),
 	}
+	cr.Log.V(1).Info("Detected response format",
+		"format", detected.Format, "confidence", detected.Confidence,
+		"responseLen", len(responseText))
 	if replyMessageTS != "" {
 		outMsg.Metadata = map[string]string{"replyToTS": replyMessageTS}
 	}

@@ -28,6 +28,7 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	github.com/spf13/cobra v1.10.2
 	github.com/sympozium-ai/llmfit-dra/api v0.0.0-20260708145247-787d849d84af
+	github.com/yuin/goldmark v1.8.6
 	github.com/zeebo/blake3 v0.2.4
 	go.mau.fi/whatsmeow v0.0.0-20260219150138-7ae702b1eed4
 	go.opentelemetry.io/contrib/bridges/otelslog v0.15.0

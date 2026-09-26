@@ -53,6 +53,108 @@ func TestRedactErrorEmpty(t *testing.T) {
 	}
 }
 
+func TestConvertMarkdownToHTML(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    string
+		wantErr bool
+	}{
+		{
+			name:  "plain text",
+			input: "Hello world",
+			want:  "Hello world",
+		},
+		{
+			name:  "bold and italic",
+			input: "**bold** and *italic*",
+			want:  "<strong>bold</strong> and <em>italic</em>",
+		},
+		{
+			name:  "heading",
+			input: "# Heading 1",
+			want:  "<h1 id=\"heading-1\">Heading 1</h1>",
+		},
+		{
+			name:  "code block",
+			input: "```\ncode\n```",
+			want:  "<pre><code>code\n</code></pre>",
+		},
+		{
+			name:  "inline code",
+			input: "Here is some `code`",
+			want:  "Here is some <code>code</code>",
+		},
+		{
+			name:  "link",
+			input: "[example](https://example.com)",
+			want:  `<a href="https://example.com">example</a>`,
+		},
+		{
+			name:  "unordered list",
+			input: "- item 1\n- item 2",
+			want:  "<ul>\n<li>item 1</li>\n<li>item 2</li>\n</ul>",
+		},
+		{
+			name:  "bold with markdown symbols",
+			input: "**hello**",
+			want:  "<strong>hello</strong>",
+		},
+		{
+			name:    "empty string",
+			input:   "",
+			wantErr: true,
+		},
+		{
+			name:  "multiple paragraphs",
+			input: "First paragraph\n\nSecond paragraph",
+			want:  "<p>First paragraph</p>\n<p>Second paragraph</p>",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := convertMarkdownToHTML(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("convertMarkdownToHTML() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if err == nil && !strings.Contains(got, tt.want) {
+				t.Errorf("convertMarkdownToHTML() = %q, want to contain %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestConvertMarkdownToHTMLKnownFormats(t *testing.T) {
+	// Test that we can convert various markdown inputs without errors
+	// for the formats the channel supports.
+	knownMarkdown := []string{
+		"# Heading",
+		"**bold** text",
+		"- item 1\n- item 2",
+		"```go\nfmt.Println(\"hello\")\n```",
+		"[link](https://example.com)",
+		"> blockquote",
+	}
+	for _, md := range knownMarkdown {
+		html, err := convertMarkdownToHTML(md)
+		if err != nil {
+			t.Errorf("convertMarkdownToHTML(%q) error: %v", md, err)
+		}
+		if html == "" {
+			t.Errorf("convertMarkdownToHTML(%q) returned empty HTML", md)
+		}
+	}
+}
+
+func TestConvertMarkdownToHTMLEmpty(t *testing.T) {
+	got, err := convertMarkdownToHTML("")
+	if err == nil {
+		t.Errorf("expected error for empty input, got %q", got)
+	}
+}
+
 func TestNextTxnID(t *testing.T) {
 	var txnMu sync.Mutex
 	var lastTxnID int64
