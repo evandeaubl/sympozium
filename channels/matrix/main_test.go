@@ -155,6 +155,91 @@ func TestConvertMarkdownToHTMLEmpty(t *testing.T) {
 	}
 }
 
+func TestIsMention(t *testing.T) {
+	tests := []struct {
+		name     string
+		text     string
+		botUserID string
+		want     bool
+	}{
+		{"full MXID mention", "Hey @mybot:matrix.org can you help?", "@mybot:matrix.org", true},
+		{"full MXID mention case insensitive", "Hey @MYBOT:matrix.org help", "@mybot:matrix.org", true},
+		{"bare localpart mention", "Hey @mybot can you help?", "@mybot:matrix.org", true},
+		{"bare localpart at start", "@mybot ping", "@mybot:matrix.org", true},
+		{"no mention", "Can anyone help?", "@mybot:matrix.org", false},
+		{"empty text", "", "@mybot:matrix.org", false},
+		{"empty botID", "hello", "", false},
+		{"partial match not mention", "mybotify is cool", "@mybot:matrix.org", false},
+		{"mention with <@> wrap", "Hey <@mybot:matrix.org> help", "@mybot:matrix.org", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isMention(tt.text, tt.botUserID)
+			if got != tt.want {
+				t.Errorf("isMention(%q, %q) = %v, want %v", tt.text, tt.botUserID, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTriggerAllowed(t *testing.T) {
+	tests := []struct {
+		name     string
+		allowed  map[string]bool
+		k        triggerKind
+		want     bool
+	}{
+		{"empty allowlist allows all", map[string]bool{}, kindChannel, true},
+		{"empty allowlist allows dm", map[string]bool{}, kindDM, true},
+		{"empty allowlist allows mention", map[string]bool{}, kindMention, true},
+		{"mention allowed", map[string]bool{"mention": true}, kindMention, true},
+		{"dm allowed", map[string]bool{"dm": true}, kindDM, true},
+		{"channel allowed", map[string]bool{"channel": true}, kindChannel, true},
+		{"mention not allowed", map[string]bool{"dm": true}, kindMention, false},
+		{"dm not allowed", map[string]bool{"channel": true}, kindDM, false},
+		{"channel not allowed", map[string]bool{"mention": true}, kindChannel, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &matrixConfig{allowedTriggers: tt.allowed}
+			got := c.triggerAllowed(tt.k)
+			if got != tt.want {
+				t.Errorf("triggerAllowed(%v) with allowed=%v = %v, want %v", tt.k, tt.allowed, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCsvToSet(t *testing.T) {
+	tests := []struct {
+		name string
+		input string
+		want  map[string]bool
+	}{
+		{"single value", "mention", map[string]bool{"mention": true}},
+		{"multiple values", "mention,dm,channel", map[string]bool{"mention": true, "dm": true, "channel": true}},
+		{"with spaces", " mention , dm , channel ", map[string]bool{"mention": true, "dm": true, "channel": true}},
+		{"empty string", "", map[string]bool{}},
+		{"only commas and spaces", " , , ", map[string]bool{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := csvToSet(tt.input)
+			if len(got) != len(tt.want) {
+				t.Errorf("csvToSet(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+			for k := range tt.want {
+				if !got[k] {
+					t.Errorf("csvToSet(%q) missing key %q", tt.input, k)
+				}
+			}
+		})
+	}
+}
+
 func TestNextTxnID(t *testing.T) {
 	var txnMu sync.Mutex
 	var lastTxnID int64

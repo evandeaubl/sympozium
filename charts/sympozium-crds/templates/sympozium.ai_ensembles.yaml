@@ -431,6 +431,17 @@ spec:
                         settings (homeserver URL) for this agent configuration. When
                         non-nil, replaces the ensemble-level MatrixOptions entirely.
                       properties:
+                        allowedTriggers:
+                          description: |-
+                            AllowedTriggers gates which inbound message kinds may start an
+                            AgentRun. Values: "mention" (the bot is @-mentioned in the text),
+                            "dm" (direct message room detected via m.direct account data or
+                            by member count), "channel" (any other message in any room).
+                            When empty, all kinds trigger the agent.
+                            Composes with AccessControl.
+                          items:
+                            type: string
+                          type: array
                         homeserver:
                           description: |-
                             Homeserver is the base URL of the Matrix homeserver
@@ -2992,6 +3003,17 @@ spec:
                   (homeserver URL). Propagated as ChannelSpec.Matrix on every
                   generated Agent for the matrix channel.
                 properties:
+                  allowedTriggers:
+                    description: |-
+                      AllowedTriggers gates which inbound message kinds may start an
+                      AgentRun. Values: "mention" (the bot is @-mentioned in the text),
+                      "dm" (direct message room detected via m.direct account data or
+                      by member count), "channel" (any other message in any room).
+                      When empty, all kinds trigger the agent.
+                      Composes with AccessControl.
+                    items:
+                      type: string
+                    type: array
                   homeserver:
                     description: |-
                       Homeserver is the base URL of the Matrix homeserver

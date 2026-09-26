@@ -396,6 +396,15 @@ type MatrixChannelOptions struct {
 	// (e.g. https://matrix.org). Required for the Matrix channel.
 	// +optional
 	Homeserver string `json:"homeserver,omitempty"`
+
+	// AllowedTriggers gates which inbound message kinds may start an
+	// AgentRun. Values: "mention" (the bot is @-mentioned in the text),
+	// "dm" (direct message room detected via m.direct account data or
+	// by member count), "channel" (any other message in any room).
+	// When empty, all kinds trigger the agent.
+	// Composes with AccessControl.
+	// +optional
+	AllowedTriggers []string `json:"allowedTriggers,omitempty"`
 }
 
 // AgentsSpec defines agent configuration.

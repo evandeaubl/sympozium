@@ -155,6 +155,7 @@ spec:
         secret: ${CHANNEL_SECRET_REF}
       matrix:
         homeserver: ${MATRIX_HOMESERVER}
+        allowedTriggers: ["mention", "dm"]
 EOF
 
 # Wait for the channel Deployment to appear
@@ -222,6 +223,18 @@ if $deploy_found; then
         pass "MATRIX_HOMESERVER env var injected: $homeserver_env"
     else
         fail "MATRIX_HOMESERVER env var not found or incorrect: '$homeserver_env'"
+        failures=$((failures + 1))
+    fi
+fi
+
+# Check MATRIX_ALLOWED_TRIGGERS env var is injected when configured
+if $deploy_found; then
+    triggers_env=$(kubectl get deployment "$deploy_name" -n "$NAMESPACE" \
+        -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="MATRIX_ALLOWED_TRIGGERS")].value}' 2>/dev/null || echo "")
+    if [[ "$triggers_env" == "mention,dm" ]]; then
+        pass "MATRIX_ALLOWED_TRIGGERS env var injected: $triggers_env"
+    else
+        fail "MATRIX_ALLOWED_TRIGGERS env var not found or incorrect: '$triggers_env'"
         failures=$((failures + 1))
     fi
 fi

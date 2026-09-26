@@ -633,6 +633,17 @@ spec:
                       description: Matrix holds Matrix-specific options. Ignored for
                         other channel types.
                       properties:
+                        allowedTriggers:
+                          description: |-
+                            AllowedTriggers gates which inbound message kinds may start an
+                            AgentRun. Values: "mention" (the bot is @-mentioned in the text),
+                            "dm" (direct message room detected via m.direct account data or
+                            by member count), "channel" (any other message in any room).
+                            When empty, all kinds trigger the agent.
+                            Composes with AccessControl.
+                          items:
+                            type: string
+                          type: array
                         homeserver:
                           description: |-
                             Homeserver is the base URL of the Matrix homeserver

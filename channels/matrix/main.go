@@ -54,6 +54,7 @@ type MatrixChannel struct {
 	client        *http.Client
 	healthy       bool
 	mu            sync.RWMutex
+	cfg           *matrixConfig
 }
 
 // matrixSyncResponse is a subset of the Matrix /sync response.
@@ -172,6 +173,7 @@ func main() {
 		accessToken:   resolvedToken,
 		userID:        userID,
 		client:        &http.Client{Timeout: defaultTimeout},
+		cfg:           loadMatrixConfig(log),
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -408,6 +410,20 @@ func (mc *MatrixChannel) handleSyncEvent(ctx context.Context, roomID string, eve
 		return
 	}
 
+	// Apply trigger gating: if allowedTriggers is configured, only accept
+	// messages that satisfy one of the configured trigger kinds (mention,
+	// dm, channel). DMs are detected via m.direct account data or by
+	// member count; mentions are detected by checking for the bot's MXID
+	// in the message text.
+	kind, err := classifyKind(text, mc.userID, roomID, mc.userID, mc.accessToken, mc.homeserverURL, mc.client)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to classify trigger kind for message %s in %s: %v\n", event.EventID, roomID, err)
+		kind = kindChannel
+	}
+	if !mc.cfg.triggerAllowed(kind) {
+		return
+	}
+
 	senderID := event.Sender
 	displayName := extractDisplayNameFromMXID(senderID)
 
@@ -420,6 +436,7 @@ func (mc *MatrixChannel) handleSyncEvent(ctx context.Context, roomID string, eve
 			"messageId": event.EventID,
 			"msgtype":   msgtype,
 			"originTs":  strconv.FormatInt(event.OriginServerTS, 10),
+			"trigger":   string(kind),
 		},
 	}
 
